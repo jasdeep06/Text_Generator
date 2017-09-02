@@ -1,0 +1,93 @@
+import tensorflow as tf
+import numpy as np
+from tensorflow.contrib import rnn
+from tensorflow.python.util import nest
+
+
+
+seq_length=3
+batch_size=4
+input_length=4
+hidden_units=5
+num_layers=2
+
+
+
+x=tf.placeholder("float32",[None,batch_size,input_length])
+#h_state=tf.Variable(initial_value=tf.zeros([batch_size,hidden_units],dtype="float32"),trainable=False)
+#c_state=tf.Variable(initial_value=tf.zeros([batch_size,hidden_units],dtype="float32"),trainable=False)
+
+h_state = tf.placeholder(tf.float32,[num_layers,batch_size,hidden_units])
+c_state = tf.placeholder(tf.float32,[num_layers,batch_size, hidden_units])
+
+unstacked_h_state=tf.unstack(h_state,num_layers,axis=0)
+unstacked_c_state=tf.unstack(c_state,num_layers,axis=0)
+
+
+
+input=tf.unstack(x,seq_length,0)
+#input list is list of seq_length length with seq_length number of [batch_size,input_length] arrays.
+"""""
+stacked_layer=[]
+for i in range(num_layers):
+    stacked_layer.append(rnn.BasicLSTMCell(num_units=hidden_units,forget_bias=1.0))
+stacked_lstm=tf.nn.rnn_cell.MultiRNNCell(stacked_layer)
+"""
+cell = tf.contrib.rnn.MultiRNNCell(
+        [rnn.DropoutWrapper(rnn.BasicLSTMCell(hidden_units),output_keep_prob=0.5) for _ in range(num_layers)], state_is_tuple=True)
+
+#initial_state=lstm_layer.zero_state(batch_size,"float32")
+#initial_state=tf.nn.rnn_cell.LSTMStateTuple(c_state,h_state)
+initial_state=[]
+for i in range(num_layers):
+    initial_state.append(tf.nn.rnn_cell.LSTMStateTuple(unstacked_c_state[i],unstacked_h_state[i]))
+
+
+output,state=rnn.static_rnn(cell=cell,inputs=input,initial_state=initial_state)
+#output is list with seq_length number of [batch_size,hidden_units] arrays
+#state is tuple of 2 elements each an array of dimension [batch_size,hidden_units]
+#assign_op_h=tf.assign(h_state,state[1])
+#assign_op_c=tf.assign(c_state,state[0])
+
+
+
+sess=tf.InteractiveSession()
+sess.run(tf.global_variables_initializer())
+
+
+batch_x=np.random.randint(10,size=(seq_length,batch_size,input_length)).astype("float32")
+
+iteration=0
+
+while iteration<4:
+
+        if iteration==0:
+
+            next_state=sess.run(state,feed_dict={x:batch_x,h_state:np.zeros((num_layers,batch_size,hidden_units),dtype="float"),c_state:np.zeros((num_layers,batch_size,hidden_units),dtype="float")})
+            print(next_state)
+
+        if iteration>0:
+            new_c=[]
+            new_h=[]
+            for i in range(num_layers):
+                new_c.append(next_state[i][0])
+                new_h.append(next_state[i][1])
+            next_state=sess.run(state,feed_dict={x:batch_x,h_state:new_h,c_state:new_c})
+            print(next_state)
+
+
+
+
+        """""
+        print("hi")
+        sess.run(assign_op_c,feed_dict={x:batch_x})
+        print("hello")
+        sess.run(assign_op_h,feed_dict={x:batch_x})
+        print(sess.run(initial_state,feed_dict={x:batch_x}))
+
+        """""
+        iteration = iteration + 1
+
+
+
+
